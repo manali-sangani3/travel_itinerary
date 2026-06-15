@@ -42,20 +42,64 @@ class _JournalPageState extends State<JournalPage> {
         title: const Text('Travel Journal'),
         leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => context.go('/trips/${widget.tripId}')),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _entries.isEmpty
-              ? EmptyState(
-                  icon: Icons.book_outlined,
-                  title: 'No journal entries yet',
-                  subtitle: 'Write about your travel experiences and upload photos',
-                  actionLabel: 'Write Entry',
-                  onAction: () => context.go('/trips/${widget.tripId}/journal/entry'),
-                )
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
+      backgroundColor: const Color(0xFFF5F5F5),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: AppCard(
+                    onTap: () => context.go('/trips/${widget.tripId}/journal/notes'),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.note_alt_outlined, color: AppColors.primary),
+                          const SizedBox(width: 8),
+                          Text('Notes', style: AppTextStyles.labelLarge),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: AppCard(
+                    onTap: () => context.go('/trips/${widget.tripId}/journal/gallery'),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.photo_library_outlined, color: AppColors.primary),
+                          const SizedBox(width: 8),
+                          Text('Gallery', style: AppTextStyles.labelLarge),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _entries.isEmpty
+                    ? EmptyState(
+                        icon: Icons.book_outlined,
+                        title: 'No journal entries yet',
+                        subtitle: 'Write about your travel experiences and upload photos',
+                        actionLabel: 'Write Entry',
+                        onAction: () => context.go('/trips/${widget.tripId}/journal/entry'),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _load,
+                        child: ListView.separated(
+                          padding: const EdgeInsets.all(16),
                     itemCount: _entries.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (_, i) {
@@ -114,6 +158,9 @@ class _JournalPageState extends State<JournalPage> {
                     },
                   ),
                 ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.go('/trips/${widget.tripId}/journal/entry'),
         child: const Icon(Icons.add_rounded),

@@ -4,6 +4,11 @@ import '../network/api_client.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/trips/presentation/bloc/trips_bloc.dart';
 import '../../features/itinerary/presentation/bloc/itinerary_bloc.dart';
+import '../../features/itinerary/presentation/bloc/weather_bloc.dart';
+import '../../features/journal/presentation/bloc/notes_bloc.dart';
+import '../../features/journal/presentation/bloc/photos_bloc.dart';
+import '../../features/collaboration/presentation/bloc/sharing_bloc.dart';
+import '../../features/documents/presentation/bloc/document_checklist_bloc.dart';
 
 final sl = GetIt.instance;
 
@@ -17,4 +22,9 @@ Future<void> initDependencies() async {
   sl.registerFactory(() => AuthBloc(sl(), sl()));
   sl.registerFactory(() => TripsBloc(sl()));
   sl.registerFactory(() => ItineraryBloc(sl()));
+  sl.registerFactory(() => WeatherBloc(sl()));
+  sl.registerFactory(() => NotesBloc(sl()));
+  sl.registerFactory(() => PhotosBloc(sl()));
+  sl.registerFactory(() => SharingBloc(sl()));
+  sl.registerFactory(() => DocumentChecklistBloc(sl()));
 }

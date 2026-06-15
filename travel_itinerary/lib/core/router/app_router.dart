@@ -16,6 +16,8 @@ import '../../features/budget/presentation/pages/add_expense_page.dart';
 import '../../features/collaboration/presentation/pages/collaboration_page.dart';
 import '../../features/journal/presentation/pages/journal_page.dart';
 import '../../features/journal/presentation/pages/journal_entry_page.dart';
+import '../../features/journal/presentation/pages/notes_page.dart';
+import '../../features/journal/presentation/pages/photo_gallery_page.dart';
 import '../../features/packing/presentation/pages/packing_page.dart';
 import '../constants/app_constants.dart';
 
@@ -51,6 +53,8 @@ class AppRouter {
           GoRoute(path: 'collaboration',  builder: (_, s) => CollaborationPage(tripId: s.pathParameters['id']!)),
           GoRoute(path: 'journal',        builder: (_, s) => JournalPage(tripId: s.pathParameters['id']!)),
           GoRoute(path: 'journal/entry',  builder: (_, s) => JournalEntryPage(tripId: s.pathParameters['id']!)),
+          GoRoute(path: 'journal/notes',  builder: (_, s) => NotesPage(tripId: s.pathParameters['id']!)),
+          GoRoute(path: 'journal/gallery', builder: (_, s) => PhotoGalleryPage(tripId: s.pathParameters['id']!)),
           GoRoute(path: 'packing',        builder: (_, s) => PackingPage(tripId: s.pathParameters['id']!)),
         ],
       ),

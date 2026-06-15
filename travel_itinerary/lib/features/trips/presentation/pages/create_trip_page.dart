@@ -149,7 +149,13 @@ class _CreateTripPageState extends State<CreateTripPage> {
                 ),
               ],
               const SizedBox(height: 32),
-              AppButton(label: 'Create Trip', onPressed: _submit),
+              BlocBuilder<TripsBloc, TripsState>(
+                builder: (context, state) => AppButton(
+                  label: 'Create Trip',
+                  loading: state is TripsLoading,
+                  onPressed: _submit,
+                ),
+              ),
               const SizedBox(height: 24),
             ],
           ),

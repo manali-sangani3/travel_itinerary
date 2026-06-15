@@ -35,14 +35,7 @@ class TripCard extends StatelessWidget {
     }
   }
 
-  String _statusLabel() {
-    switch (trip.status) {
-      case 'active': return 'Fully Booked';
-      case 'planning': return 'Planning';
-      case 'completed': return 'Completed';
-      default: return trip.status;
-    }
-  }
+  String _statusLabel() => trip.status;
 
   @override
   Widget build(BuildContext context) {

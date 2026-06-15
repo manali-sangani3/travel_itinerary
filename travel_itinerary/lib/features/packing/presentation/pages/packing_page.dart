@@ -28,8 +28,14 @@ class _PackingPageState extends State<PackingPage> {
     'Health': ['Medicines', 'First aid kit', 'Hand sanitizer', 'Face masks'],
   };
 
+  List<Map<String, dynamic>> _templates = [];
+
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+    _loadTemplates();
+  }
   @override
   void dispose() { _labelCtrl.dispose(); _catCtrl.dispose(); super.dispose(); }
 
@@ -39,6 +45,56 @@ class _PackingPageState extends State<PackingPage> {
       final data = await sl<ApiClient>().get('/trips/${widget.tripId}/packing') as List;
       setState(() { _items = data.cast(); _loading = false; });
     } catch (_) { setState(() => _loading = false); }
+  }
+
+  Future<void> _loadTemplates() async {
+    try {
+      final data = await sl<ApiClient>().get('/trips/${widget.tripId}/packing/templates') as List;
+      setState(() { _templates = data.cast(); });
+    } catch (_) {}
+  }
+
+  Future<void> _generateFromTemplate(String templateId) async {
+    setState(() => _loading = true);
+    try {
+      await sl<ApiClient>().post('/trips/${widget.tripId}/packing/generate', data: {'templateId': templateId});
+      _load();
+    } catch (e) {
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Generation failed: $e'), backgroundColor: AppColors.error));
+    }
+  }
+
+  void _showTemplatesDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Generate from Template'),
+        content: _templates.isEmpty
+            ? const Text('No templates available.')
+            : SizedBox(
+                width: double.maxFinite,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _templates.length,
+                  itemBuilder: (context, i) {
+                    final t = _templates[i];
+                    return ListTile(
+                      title: Text(t['name'] ?? ''),
+                      subtitle: Text('${(t['items'] as List).length} items'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _generateFromTemplate(t['id']);
+                      },
+                    );
+                  },
+                ),
+              ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        ],
+      ),
+    );
   }
 
   Future<void> _add(String label, String? category) async {
@@ -99,6 +155,11 @@ class _PackingPageState extends State<PackingPage> {
         title: const Text('Packing List'),
         leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => context.go('/trips/${widget.tripId}')),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_awesome_rounded),
+            onPressed: _showTemplatesDialog,
+            tooltip: 'Generate list',
+          ),
           PopupMenuButton<String>(
             itemBuilder: (_) => _presets.keys.map((k) => PopupMenuItem(value: k, child: Text('Add $k preset'))).toList(),
             onSelected: (cat) { for (final label in _presets[cat]!) _add(label, cat); },

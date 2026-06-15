@@ -1,0 +1,16 @@
+# AI Rules & Behavior Guidelines
+Always respect the instructions defined in:
+- Personas:
+    - Manager:[personas/manager_persona.md](personas/manager_persona.md)
+    - Frontend Developer:[personas/frontend_persona.md](personas/frontend_persona.md)
+    - Backend Developer:[personas/backend_persona.md](personas/backend_persona.md)
+    - QA:[personas/qa_persona.md](personas/qa_persona.md)
+- Project Boundaries: [template/project_boundary.md](template/project_boundary.md)
+- Save Token Rules: [template/save_token.md](template/save_token.md)
+
+## Critical Constraints
+1. No filler or code explanations. Output qnly code changes/diffs.
+2. Do not update secondary files (README, logs, tests, etc.) unless requested.
+3. Run project in command terminal (not agent chat). Do not commit/push without confirmation.
+4. Document Rule: Use only content from referenced documents. No assumptions, additions, enhancements, or inferred requirements. If unclear, ask.
+5. Prompt History Rule: Always append any new user prompts to `workflow/prompt_history.md` incrementally, starting from where it last stopped, to keep the prompt history document dynamically updated after each instruction.

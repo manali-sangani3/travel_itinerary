@@ -13,6 +13,7 @@ class BudgetPage extends StatefulWidget {
 
 class _BudgetPageState extends State<BudgetPage> {
   List<Map<String, dynamic>> _summary = [];
+  String _currency = 'INR';
   bool _loading = true;
 
   @override
@@ -24,9 +25,10 @@ class _BudgetPageState extends State<BudgetPage> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final s = await sl<ApiClient>().get('/trips/${widget.tripId}/budget/summary') as List;
+      final res = await sl<ApiClient>().get('/trips/${widget.tripId}/budget') as Map<String, dynamic>;
       setState(() {
-        _summary = s.cast<Map<String, dynamic>>();
+        _summary = (res['categoryBreakdown'] as List).cast<Map<String, dynamic>>();
+        _currency = res['currency'] ?? 'INR';
         _loading = false;
       });
     } catch (_) {
@@ -38,10 +40,41 @@ class _BudgetPageState extends State<BudgetPage> {
   double get _totalActual  => _summary.fold(0, (s, i) => s + (i['actual']  as num).toDouble());
   double get _remaining    => _totalPlanned - _totalActual;
 
+  String _getCurrencySymbol(String code) {
+    switch (code.toUpperCase()) {
+      case 'INR': return '₹';
+      case 'USD': return '\$';
+      case 'EUR': return '€';
+      case 'GBP': return '£';
+      case 'AUD': return 'A\$';
+      case 'CAD': return 'C\$';
+      case 'JPY': return '¥';
+      default: return '$code ';
+    }
+  }
+
   String _fmt(double v) {
-    if (v >= 100000) return '₹${(v / 100000).toStringAsFixed(1)}L';
-    if (v >= 1000)   return '₹${(v / 1000).toStringAsFixed(1)}K';
-    return '₹${v.toStringAsFixed(0)}';
+    final sym = _getCurrencySymbol(_currency);
+    if (v >= 100000) return '$sym${(v / 100000).toStringAsFixed(1)}L';
+    if (v >= 1000)   return '$sym${(v / 1000).toStringAsFixed(1)}K';
+    return '$sym${v.toStringAsFixed(0)}';
+  }
+
+  void _showSetBudgetsSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => _SetBudgetsSheet(
+        tripId: widget.tripId,
+        summary: _summary,
+        onSuccess: () {
+          Navigator.pop(ctx);
+          _load();
+        },
+      ),
+    );
   }
 
   @override
@@ -66,12 +99,14 @@ class _BudgetPageState extends State<BudgetPage> {
                               remaining: _remaining,
                               total: _totalPlanned,
                               actual: _totalActual,
+                              fmt: _fmt,
                             ),
                             const SizedBox(height: 24),
                             _SpendingSection(
                               summary: _summary,
                               tripId: widget.tripId,
                               fmt: _fmt,
+                              onSetBudgets: _showSetBudgetsSheet,
                             ),
                           ],
                         ),
@@ -82,7 +117,10 @@ class _BudgetPageState extends State<BudgetPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.go('/trips/${widget.tripId}/budget/expense'),
+        onPressed: () async {
+          await context.push('/trips/${widget.tripId}/budget/expense');
+          _load();
+        },
         backgroundColor: const Color(0xFF111827),
         child: const Icon(Icons.add, color: Colors.white),
       ),
@@ -131,7 +169,8 @@ class _TopBar extends StatelessWidget {
 
 class _BudgetRingCard extends StatelessWidget {
   final double remaining, total, actual;
-  const _BudgetRingCard({required this.remaining, required this.total, required this.actual});
+  final String Function(double) fmt;
+  const _BudgetRingCard({required this.remaining, required this.total, required this.actual, required this.fmt});
 
   @override
   Widget build(BuildContext context) {
@@ -183,14 +222,14 @@ class _BudgetRingCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      total > 0 ? _fmtRupee(remaining) : '₹0',
+                      total > 0 ? fmt(remaining) : fmt(0),
                       style: const TextStyle(
                         fontSize: 28, fontWeight: FontWeight.w800, color: Color(0xFF111827),
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'of ${_fmtRupee(total)}',
+                      'of ${fmt(total)}',
                       style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
                     ),
                   ],
@@ -213,7 +252,7 @@ class _BudgetRingCard extends StatelessWidget {
                     children: [
                       const Text('Daily Avg.', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
                       const SizedBox(height: 4),
-                      Text('₹$dailyAvg', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                      Text(fmt(dailyAvg.toDouble()), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
                     ],
                   ),
                 ),
@@ -241,12 +280,6 @@ class _BudgetRingCard extends StatelessWidget {
       ),
     );
   }
-
-  String _fmtRupee(double v) {
-    if (v >= 100000) return '₹${(v / 100000).toStringAsFixed(1)}L';
-    if (v >= 1000)   return '₹${(v / 1000).toStringAsFixed(1)}K';
-    return '₹${v.toStringAsFixed(0)}';
-  }
 }
 
 // ─── Spending by category section ──────────────────────────────────────────
@@ -255,8 +288,14 @@ class _SpendingSection extends StatelessWidget {
   final List<Map<String, dynamic>> summary;
   final String tripId;
   final String Function(double) fmt;
+  final VoidCallback onSetBudgets;
 
-  const _SpendingSection({required this.summary, required this.tripId, required this.fmt});
+  const _SpendingSection({
+    required this.summary,
+    required this.tripId,
+    required this.fmt,
+    required this.onSetBudgets,
+  });
 
   static const _catIcons = {
     'accommodation': Icons.hotel_rounded,
@@ -291,8 +330,8 @@ class _SpendingSection extends StatelessWidget {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
             ),
             GestureDetector(
-              onTap: () {},
-              child: const Text('View Details',
+              onTap: onSetBudgets,
+              child: const Text('Set Budgets',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF059669))),
             ),
           ],
@@ -325,7 +364,7 @@ class _SpendingSection extends StatelessWidget {
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
                     ),
                     Text(
-                      '${fmt(actual)} / ${fmt(planned > 0 ? planned : actual + 500)}',
+                      '${fmt(actual)} / ${planned > 0 ? fmt(planned) : 'Not set'}',
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151)),
                     ),
                   ],
@@ -334,7 +373,7 @@ class _SpendingSection extends StatelessWidget {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
-                    value: progress > 0 ? progress : 0.75,
+                    value: progress,
                     minHeight: 8,
                     backgroundColor: const Color(0xFFE5E7EB),
                     valueColor: AlwaysStoppedAnimation(
@@ -395,6 +434,149 @@ class _BottomNav extends StatelessWidget {
           ),
           const BottomNavigationBarItem(icon: Icon(Icons.person_outline_rounded), label: 'Profile'),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Set Category Budgets Sheet ─────────────────────────────────────────────
+
+class _SetBudgetsSheet extends StatefulWidget {
+  final String tripId;
+  final List<Map<String, dynamic>> summary;
+  final VoidCallback onSuccess;
+
+  const _SetBudgetsSheet({
+    required this.tripId,
+    required this.summary,
+    required this.onSuccess,
+  });
+
+  @override
+  State<_SetBudgetsSheet> createState() => _SetBudgetsSheetState();
+}
+
+class _SetBudgetsSheetState extends State<_SetBudgetsSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final Map<String, TextEditingController> _controllers = {};
+  bool _saving = false;
+
+  static const _catLabels = {
+    'accommodation': 'Lodging',
+    'food': 'Food',
+    'transport': 'Flights',
+    'activities': 'Activities',
+    'misc': 'Misc',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    for (final cat in AppConstants.budgetCategories) {
+      final item = widget.summary.firstWhere(
+        (element) => element['category'] == cat,
+        orElse: () => <String, dynamic>{},
+      );
+      final planned = item['planned'] ?? 0.0;
+      _controllers[cat] = TextEditingController(text: planned > 0 ? planned.toString() : '');
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    try {
+      final budgets = <String, double>{};
+      for (final entry in _controllers.entries) {
+        budgets[entry.key] = double.tryParse(entry.value.text) ?? 0.0;
+      }
+      await sl<ApiClient>().put('/trips/${widget.tripId}/budget', data: budgets);
+      widget.onSuccess();
+    } catch (e) {
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed: $e'), backgroundColor: const Color(0xFFEF4444)),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Set Category Budgets',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ...AppConstants.budgetCategories.map((cat) {
+                final label = _catLabels[cat] ?? cat;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: TextFormField(
+                    controller: _controllers[cat],
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: '$label Budget',
+                      hintText: '0.00',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                    validator: (v) {
+                      if (v != null && v.isNotEmpty && double.tryParse(v) == null) {
+                        return 'Enter a valid number';
+                      }
+                      return null;
+                    },
+                  ),
+                );
+              }),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _saving ? null : _submit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF111827),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: _saving
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : const Text(
+                        'Save Budgets',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

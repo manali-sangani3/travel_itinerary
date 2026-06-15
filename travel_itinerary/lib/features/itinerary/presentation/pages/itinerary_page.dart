@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../bloc/itinerary_bloc.dart';
+import '../bloc/weather_bloc.dart';
+import '../../../trips/presentation/bloc/trips_bloc.dart';
+import '../../../../core/di/injection.dart';
 import '../widgets/add_activity_sheet.dart';
+import '../../../../core/theme/app_colors.dart';
 
 class ItineraryPage extends StatefulWidget {
   final String tripId;
@@ -16,6 +20,7 @@ class ItineraryPage extends StatefulWidget {
 class _ItineraryPageState extends State<ItineraryPage> {
   int _selectedDay = 0;
   static const _totalDays = 5;
+  bool _weatherLoadedOnce = false;
 
   // Base date for the day strip (Oct 12 style)
   DateTime get _baseDate {
@@ -31,6 +36,12 @@ class _ItineraryPageState extends State<ItineraryPage> {
     context.read<ItineraryBloc>().add(ItineraryLoadRequested(widget.tripId));
   }
 
+  void _triggerWeatherLoad(BuildContext context, String destination) {
+    final date = _baseDate.add(Duration(days: _selectedDay));
+    final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+    context.read<WeatherBloc>().add(WeatherLoadRequested(destination, dateStr));
+  }
+
   void _showAddSheet() {
     showModalBottomSheet(
       context: context,
@@ -42,51 +53,139 @@ class _ItineraryPageState extends State<ItineraryPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _TopBar(),
-            const SizedBox(height: 20),
-            _DateStrip(
-              baseDate: _baseDate,
-              totalDays: _totalDays,
-              selectedDay: _selectedDay,
-              onDaySelected: (d) => setState(() => _selectedDay = d),
-            ),
-            const SizedBox(height: 20),
-            Expanded(
-              child: BlocBuilder<ItineraryBloc, ItineraryState>(
-                builder: (context, state) {
-                  if (state is ItineraryLoading) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (state is ItineraryLoaded) {
-                    final dayItems = state.items
-                        .where((i) => i.dayIndex == _selectedDay)
-                        .toList()
-                      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
-                    return _TimelineList(
-                      tripId: widget.tripId,
-                      items: dayItems,
-                      dayIndex: _selectedDay,
-                    );
-                  }
-                  return const SizedBox();
-                },
+    return BlocProvider<WeatherBloc>(
+      create: (_) => sl<WeatherBloc>(),
+      child: Builder(
+        builder: (context) {
+          final tripsState = context.watch<TripsBloc>().state;
+          final trip = tripsState is TripsLoaded ? tripsState.trips.where((t) => t.id == widget.tripId).firstOrNull : null;
+          if (trip != null && !_weatherLoadedOnce) {
+            _weatherLoadedOnce = true;
+            _triggerWeatherLoad(context, trip.destination);
+          }
+
+          return Scaffold(
+            backgroundColor: const Color(0xFFF5F5F5),
+            body: SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _TopBar(),
+                  const SizedBox(height: 20),
+                  _DateStrip(
+                    baseDate: _baseDate,
+                    totalDays: _totalDays,
+                    selectedDay: _selectedDay,
+                    onDaySelected: (d) {
+                      setState(() {
+                        _selectedDay = d;
+                      });
+                      if (trip != null) {
+                        _triggerWeatherLoad(context, trip.destination);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  BlocBuilder<WeatherBloc, WeatherState>(
+                    builder: (context, state) {
+                      if (state is WeatherLoading) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+                          child: LinearProgressIndicator(color: Color(0xFF059669)),
+                        );
+                      }
+                      if (state is WeatherLoaded) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  state.condition == 'Rainy'
+                                      ? Icons.umbrella_rounded
+                                      : (state.condition == 'Snowy' ? Icons.ac_unit_rounded : Icons.wb_sunny_rounded),
+                                  color: const Color(0xFF059669),
+                                  size: 22,
+                                ),
+                                const SizedBox(width: 12),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${state.temp.toStringAsFixed(1)}°C · ${state.condition}',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF111827), fontSize: 14),
+                                    ),
+                                    Text(
+                                      'Precipitation: ${state.precipitation}%',
+                                      style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+                      return const SizedBox();
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: BlocBuilder<ItineraryBloc, ItineraryState>(
+                      builder: (context, state) {
+                        if (state is ItineraryLoading) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        if (state is ItineraryLoaded) {
+                          final dayItems = state.items
+                              .where((i) => i.dayIndex == _selectedDay)
+                              .toList()
+                            ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+                          return _TimelineList(
+                            tripId: widget.tripId,
+                            items: dayItems,
+                            dayIndex: _selectedDay,
+                          );
+                        }
+                        if (state is ItineraryError) {
+                          return Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                                const SizedBox(height: 12),
+                                Text(state.message, style: const TextStyle(color: AppColors.textSecondary)),
+                                const SizedBox(height: 16),
+                                TextButton(
+                                  onPressed: () => context.read<ItineraryBloc>().add(ItineraryLoadRequested(widget.tripId)),
+                                  child: const Text('Retry'),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        return const SizedBox();
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+            floatingActionButton: FloatingActionButton(
+              onPressed: _showAddSheet,
+              backgroundColor: const Color(0xFF111827),
+              child: const Icon(Icons.add, color: Colors.white),
+            ),
+            bottomNavigationBar: _BottomNav(currentIndex: 1),
+          );
+        },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddSheet,
-        backgroundColor: const Color(0xFF111827),
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
-      bottomNavigationBar: _BottomNav(currentIndex: 1),
     );
   }
 }

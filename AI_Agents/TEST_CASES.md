@@ -155,3 +155,31 @@
 | PERF-03 | POST `/trips/:id/documents` | 9 MB PDF | Upload completes < 5 s on LTE simulation |
 | PERF-04 | Flutter cold start | Mid-range Android emulator | Home screen visible < 2 s |
 | PERF-05 | Drag-and-drop reorder | 10 items in list | No frame drops; 60 fps maintained |
+
+---
+
+## 11. V2 Enhancement Features
+
+| ID | Feature / Endpoint | Input | Expected |
+|---|---|---|---|
+| PACK-01 | GET `/trips/:id/packing/templates` | Valid JWT | 200 · list of available templates (e.g. beach, business) |
+| PACK-02 | POST `/trips/:id/packing/generate` | `{ templateId, durationDays }` | 201 · generated packing list populated with template items |
+| PACK-03 | PUT `/trips/:id/packing/:itemId` | `{ checked: 1 }` | 200 · check/uncheck template checklist items |
+| DOC-V2-01 | GET `/trips/:id/checklist/documents` | Valid JWT | 200 · pre-populated checklist of essential travel documents |
+| DOC-V2-02 | PUT `/trips/:id/checklist/documents` | `{ itemId, isChecked }` | 200 · checked status updated |
+| SHARE-01 | POST `/trips/:id/share` | `{ role: "view\|edit", expiresInDays }` | 201 · returns cryptographically random token URL |
+| SHARE-02 | GET `/trips/:id/share` | Owner JWT | 200 · list of active share links and invited collaborators |
+| SHARE-03 | DELETE `/trips/:id/share/:shareId` | Owner JWT | 200 · share link revoked immediately |
+| SHARE-04 | GET `/shares/:token` | Guest user (anonymous) | 200 · retrieves public read-only itinerary |
+| NOTE-01 | POST `/trips/:id/notes` | `{ content, locationTag, dayDate }` | 201 · note created successfully |
+| NOTE-02 | GET `/trips/:id/notes` | Valid JWT | 200 · chronological list of notes |
+| NOTE-03 | PUT `/trips/:id/notes/:noteId` | `{ content }` | 200 · note content updated |
+| NOTE-04 | DELETE `/trips/:id/notes/:noteId` | Valid JWT | 204 · note deleted |
+| PHOTO-01 | POST `/trips/:id/photos` | Multipart: image file + locationTag | 201 · photo uploaded and saved |
+| PHOTO-02 | GET `/trips/:id/photos` | Group by location/date | 200 · photos grouped and organized for gallery view |
+| PHOTO-03 | DELETE `/trips/:id/photos/:photoId` | Valid JWT | 204 · photo deleted |
+| WEATH-01 | GET `/weather/:destination/:date` | Valid JWT | 200 · forecast (temp, condition, precipitation) |
+| CURR-01 | GET `/currency/convert` | `base=USD&target=INR&amount=100` | 200 · converted amount and exchange rate |
+| TZ-01 | GET `/timezone/diff` | `from=Asia/Kolkata&to=Europe/Paris` | 200 · time difference, DST status, and local times |
+| BUD-V2-01 | PUT `/trips/:id/budget` | `{ accommodation, food, transport, activities, misc }` | 200 · planned budgets updated instantly on screen |
+

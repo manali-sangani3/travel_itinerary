@@ -19,12 +19,18 @@ class DocumentsPage extends StatefulWidget {
 
 class _DocumentsPageState extends State<DocumentsPage> {
   List<Map<String, dynamic>> _docs = [];
+  List<Map<String, dynamic>> _checklist = [];
   bool _loading = true;
+  bool _checklistLoading = true;
   bool _uploading = false;
   String _selectedType = 'confirmation';
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+    _loadChecklist();
+  }
 
   Future<void> _load() async {
     setState(() => _loading = true);
@@ -32,6 +38,26 @@ class _DocumentsPageState extends State<DocumentsPage> {
       final data = await sl<ApiClient>().get('/trips/${widget.tripId}/documents') as List;
       setState(() { _docs = data.cast<Map<String, dynamic>>(); _loading = false; });
     } catch (_) { setState(() => _loading = false); }
+  }
+
+  Future<void> _loadChecklist() async {
+    setState(() => _checklistLoading = true);
+    try {
+      final data = await sl<ApiClient>().get('/trips/${widget.tripId}/checklist/documents') as List;
+      setState(() { _checklist = data.cast<Map<String, dynamic>>(); _checklistLoading = false; });
+    } catch (_) { setState(() => _checklistLoading = false); }
+  }
+
+  Future<void> _toggleChecklist(String itemId, bool checked) async {
+    try {
+      await sl<ApiClient>().put('/trips/${widget.tripId}/checklist/documents', data: {
+        'itemId': itemId,
+        'checked': checked
+      });
+      _loadChecklist();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update: $e'), backgroundColor: AppColors.error));
+    }
   }
 
   Future<void> _pick() async {
@@ -70,12 +96,30 @@ class _DocumentsPageState extends State<DocumentsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Documents'),
-        leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => context.go('/trips/${widget.tripId}')),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Documents'),
+          leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => context.go('/trips/${widget.tripId}')),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'Files'),
+              Tab(text: 'Checklist'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _filesTab(),
+            _checklistTab(),
+          ],
+        ),
       ),
-      body: Column(
+    );
+  }
+
+  Widget _filesTab() => Column(
         children: [
           // Upload bar
           Container(
@@ -144,7 +188,29 @@ class _DocumentsPageState extends State<DocumentsPage> {
                       ),
           ),
         ],
-      ),
-    );
-  }
+      );
+
+  Widget _checklistTab() => _checklistLoading
+      ? const Center(child: CircularProgressIndicator())
+      : _checklist.isEmpty
+          ? const EmptyState(icon: Icons.checklist_rounded, title: 'No checklist', subtitle: 'Checklist not initialized')
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: _checklist.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (_, i) {
+                final item = _checklist[i];
+                final done = item['checked'] == 1;
+                return AppCard(
+                  child: CheckboxListTile(
+                    title: Text(item['label'] ?? '', style: AppTextStyles.labelLarge.copyWith(decoration: done ? TextDecoration.lineThrough : null)),
+                    value: done,
+                    onChanged: (val) => _toggleChecklist(item['id'], val ?? false),
+                    activeColor: AppColors.primary,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                  ),
+                );
+              },
+            );
 }

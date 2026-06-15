@@ -38,7 +38,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
         'currency': _currency.text.trim().toUpperCase(),
         'note': _note.text.trim(),
       });
-      if (mounted) context.go('/trips/${widget.tripId}/budget');
+      if (mounted) context.pop();
     } catch (e) {
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.error));
@@ -50,7 +50,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Log Expense'),
-        leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => context.go('/trips/${widget.tripId}/budget')),
+        leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => context.pop()),
       ),
       body: Form(
         key: _form,

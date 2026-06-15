@@ -1,3 +1,7 @@
+import 'dart:io';
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -14,16 +18,75 @@ import 'package:travel_itinerary/features/trips/presentation/pages/create_trip_p
 import 'package:travel_itinerary/features/trips/presentation/bloc/trips_bloc.dart';
 import 'package:travel_itinerary/features/itinerary/presentation/pages/itinerary_page.dart';
 import 'package:travel_itinerary/features/itinerary/presentation/bloc/itinerary_bloc.dart';
+import 'package:travel_itinerary/features/itinerary/presentation/bloc/weather_bloc.dart';
 import 'package:travel_itinerary/features/budget/presentation/pages/budget_page.dart';
 import 'package:travel_itinerary/features/budget/presentation/pages/add_expense_page.dart';
 import 'package:travel_itinerary/core/network/api_client.dart';
+import 'package:travel_itinerary/core/di/injection.dart';
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
 class MockAuthBloc extends Mock implements AuthBloc {}
 class MockTripsBloc extends Mock implements TripsBloc {}
 class MockItineraryBloc extends Mock implements ItineraryBloc {}
+class MockWeatherBloc extends Mock implements WeatherBloc {}
 class MockApiClient extends Mock implements ApiClient {}
+
+class FakeAuthEvent extends Fake implements AuthEvent {}
+class FakeTripsEvent extends Fake implements TripsEvent {}
+class FakeItineraryEvent extends Fake implements ItineraryEvent {}
+class FakeWeatherEvent extends Fake implements WeatherEvent {}
+class FakeWeatherState extends Fake implements WeatherState {}
+
+class MockHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    final client = MockHttpClient();
+
+    when(() => client.getUrl(any())).thenAnswer((_) {
+      final request = MockHttpClientRequest();
+      final response = MockHttpClientResponse();
+      final headers = MockHttpHeaders();
+
+      when(() => request.headers).thenReturn(headers);
+      when(() => request.close()).thenAnswer((_) => Future.value(response));
+      when(() => response.statusCode).thenReturn(200);
+      when(() => response.contentLength).thenReturn(transparentImage.length);
+      when(() => response.compressionState).thenReturn(HttpClientResponseCompressionState.notCompressed);
+
+      return Future.value(request);
+    });
+
+    when(() => client.autoUncompress = any()).thenAnswer((_) => false);
+
+    return client;
+  }
+}
+
+class MockHttpClient extends Mock implements HttpClient {}
+class MockHttpClientRequest extends Mock implements HttpClientRequest {}
+class MockHttpHeaders extends Mock implements HttpHeaders {}
+
+class MockHttpClientResponse extends Mock implements HttpClientResponse {
+  final Stream<List<int>> _delegate = Stream<List<int>>.value(transparentImage);
+
+  @override
+  StreamSubscription<List<int>> listen(
+    void Function(List<int> event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    return _delegate.listen(onData, onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+  }
+}
+
+final List<int> transparentImage = [
+  0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0x21, 0xf9, 0x04, 0x01, 0x00,
+  0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00,
+  0x00, 0x02, 0x02, 0x44, 0x01, 0x00, 0x3b
+];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -39,11 +102,6 @@ Widget wrapPlain(Widget child) => MaterialApp(home: child);
 /// Silently ignores NetworkImageLoadException which always occurs in tests
 /// because Flutter test blocks all real HTTP calls.
 Future<void> pumpPage(WidgetTester t, Widget w) async {
-  FlutterError.onError = (details) {
-    if (details.exceptionAsString().contains('NetworkImageLoadException') ||
-        details.exceptionAsString().contains('HTTP request failed')) return;
-    FlutterError.presentError(details);
-  };
   await t.pumpWidget(w);
   await t.pump();
 }
@@ -61,6 +119,26 @@ ItineraryItem makeItem({String id = '1', String title = 'Breakfast', int day = 0
 // ═════════════════════════════════════════════════════════════════════════════
 
 void main() {
+  late MockApiClient mockApiClient;
+
+  setUpAll(() {
+    registerFallbackValue(Uri.parse('https://example.com'));
+    HttpOverrides.global = MockHttpOverrides();
+    registerFallbackValue(FakeAuthEvent());
+    registerFallbackValue(FakeTripsEvent());
+    registerFallbackValue(FakeItineraryEvent());
+    registerFallbackValue(FakeWeatherEvent());
+    registerFallbackValue(FakeWeatherState());
+  });
+
+  setUp(() {
+    mockApiClient = MockApiClient();
+    if (sl.isRegistered<ApiClient>()) {
+      sl.unregister<ApiClient>();
+    }
+    sl.registerSingleton<ApiClient>(mockApiClient);
+  });
+
   group('Login Page', () {
     late MockAuthBloc authBloc;
 
@@ -85,6 +163,7 @@ void main() {
       await pumpPage(t, BlocProvider<AuthBloc>.value(
         value: authBloc, child: wrapWithRouter(const LoginPage())));
 
+      await t.ensureVisible(find.text('Sign In'));
       await t.tap(find.text('Sign In'));
       await t.pump();
 
@@ -147,6 +226,7 @@ void main() {
       await t.enterText(find.byType(TextFormField).first, 'user@example.com');
       await t.enterText(find.byType(TextFormField).last, 'Password123');
       await t.pump();
+      await t.ensureVisible(find.text('Sign In'));
       await t.tap(find.text('Sign In'));
       await t.pump();
 
@@ -294,6 +374,8 @@ void main() {
         value: tripsBloc, child: wrapWithRouter(const TripsListPage())));
 
       expect(find.text('Paris'), findsOneWidget);
+      await t.drag(find.byType(ListView), const Offset(0, -300));
+      await t.pump();
       expect(find.text('Tokyo'), findsOneWidget);
     });
 
@@ -406,18 +488,41 @@ void main() {
 
   group('Itinerary Page', () {
     late MockItineraryBloc itineraryBloc;
+    late MockTripsBloc tripsBloc;
+    late MockWeatherBloc weatherBloc;
 
     setUp(() {
       itineraryBloc = MockItineraryBloc();
+      tripsBloc = MockTripsBloc();
+      weatherBloc = MockWeatherBloc();
       when(() => itineraryBloc.stream).thenAnswer((_) => const Stream.empty());
+      when(() => tripsBloc.stream).thenAnswer((_) => const Stream.empty());
+      when(() => tripsBloc.state).thenReturn(TripsLoaded([]));
+      when(() => weatherBloc.stream).thenAnswer((_) => const Stream.empty());
+      when(() => weatherBloc.state).thenReturn(WeatherInitial());
+      when(() => weatherBloc.close()).thenAnswer((_) => Future.value());
+
+      if (sl.isRegistered<WeatherBloc>()) {
+        sl.unregister<WeatherBloc>();
+      }
+      sl.registerFactory<WeatherBloc>(() => weatherBloc);
     });
+
+    Future<void> pumpItineraryPage(WidgetTester t, Widget page) async {
+      await pumpPage(t, MultiBlocProvider(
+        providers: [
+          BlocProvider<ItineraryBloc>.value(value: itineraryBloc),
+          BlocProvider<TripsBloc>.value(value: tripsBloc),
+        ],
+        child: wrapWithRouter(page),
+      ));
+    }
 
     // ITIN-UI-01
     testWidgets('ITIN-UI-01 · loading state shows spinner', (t) async {
       when(() => itineraryBloc.state).thenReturn(ItineraryLoading());
 
-      await pumpPage(t, BlocProvider<ItineraryBloc>.value(
-        value: itineraryBloc, child: wrapWithRouter(ItineraryPage(tripId: 'trip1'))));
+      await pumpItineraryPage(t, const ItineraryPage(tripId: 'trip1'));
 
       expect(find.byType(CircularProgressIndicator), findsAtLeast(1));
     });
@@ -429,8 +534,7 @@ void main() {
         makeItem(id: '2', title: 'Louvre Guided Tour'),
       ]));
 
-      await pumpPage(t, BlocProvider<ItineraryBloc>.value(
-        value: itineraryBloc, child: wrapWithRouter(ItineraryPage(tripId: 'trip1'))));
+      await pumpItineraryPage(t, const ItineraryPage(tripId: 'trip1'));
 
       expect(find.text('Petit Dejeuner'), findsOneWidget);
       expect(find.text('Louvre Guided Tour'), findsOneWidget);
@@ -440,8 +544,7 @@ void main() {
     testWidgets('ITIN-UI-03 · empty day shows "No activities yet" empty state', (t) async {
       when(() => itineraryBloc.state).thenReturn(ItineraryLoaded([]));
 
-      await pumpPage(t, BlocProvider<ItineraryBloc>.value(
-        value: itineraryBloc, child: wrapWithRouter(ItineraryPage(tripId: 'trip1'))));
+      await pumpItineraryPage(t, const ItineraryPage(tripId: 'trip1'));
 
       expect(find.text('No activities yet'), findsOneWidget);
     });
@@ -450,8 +553,7 @@ void main() {
     testWidgets('ITIN-UI-04 · FAB (add activity) is always visible', (t) async {
       when(() => itineraryBloc.state).thenReturn(ItineraryLoaded([]));
 
-      await pumpPage(t, BlocProvider<ItineraryBloc>.value(
-        value: itineraryBloc, child: wrapWithRouter(ItineraryPage(tripId: 'trip1'))));
+      await pumpItineraryPage(t, const ItineraryPage(tripId: 'trip1'));
 
       expect(find.byType(FloatingActionButton), findsOneWidget);
     });
@@ -460,9 +562,7 @@ void main() {
     testWidgets('ITIN-UI-05 · date strip shows day-of-month for start date "2024-10-12"', (t) async {
       when(() => itineraryBloc.state).thenReturn(ItineraryLoaded([]));
 
-      await pumpPage(t, BlocProvider<ItineraryBloc>.value(
-        value: itineraryBloc,
-        child: wrapWithRouter(ItineraryPage(tripId: 'trip1', startDate: '2024-10-12'))));
+      await pumpItineraryPage(t, const ItineraryPage(tripId: 'trip1', startDate: '2024-10-12'));
 
       expect(find.text('12'), findsOneWidget);
     });
@@ -471,8 +571,7 @@ void main() {
     testWidgets('ITIN-UI-06 · error state renders error message', (t) async {
       when(() => itineraryBloc.state).thenReturn(const ItineraryError('Network error'));
 
-      await pumpPage(t, BlocProvider<ItineraryBloc>.value(
-        value: itineraryBloc, child: wrapWithRouter(ItineraryPage(tripId: 'trip1'))));
+      await pumpItineraryPage(t, const ItineraryPage(tripId: 'trip1'));
 
       expect(find.text('Network error'), findsOneWidget);
     });
@@ -481,18 +580,16 @@ void main() {
     testWidgets('ITIN-UI-07 · activity start time is displayed', (t) async {
       when(() => itineraryBloc.state).thenReturn(ItineraryLoaded([makeItem(title: 'Morning Run')]));
 
-      await pumpPage(t, BlocProvider<ItineraryBloc>.value(
-        value: itineraryBloc, child: wrapWithRouter(ItineraryPage(tripId: 'trip1'))));
+      await pumpItineraryPage(t, const ItineraryPage(tripId: 'trip1'));
 
-      expect(find.text('09:00'), findsOneWidget);
+      expect(find.textContaining('9:00 AM'), findsOneWidget);
     });
 
     // ITIN-UI-08
     testWidgets('ITIN-UI-08 · activity location is displayed', (t) async {
       when(() => itineraryBloc.state).thenReturn(ItineraryLoaded([makeItem(title: 'Breakfast')]));
 
-      await pumpPage(t, BlocProvider<ItineraryBloc>.value(
-        value: itineraryBloc, child: wrapWithRouter(ItineraryPage(tripId: 'trip1'))));
+      await pumpItineraryPage(t, const ItineraryPage(tripId: 'trip1'));
 
       expect(find.text('Café de Flore'), findsOneWidget);
     });
@@ -502,8 +599,7 @@ void main() {
       when(() => itineraryBloc.state).thenReturn(ItineraryLoaded(
         List.generate(5, (i) => makeItem(id: '$i', title: 'Activity $i'))));
 
-      await pumpPage(t, BlocProvider<ItineraryBloc>.value(
-        value: itineraryBloc, child: wrapWithRouter(ItineraryPage(tripId: 'trip1'))));
+      await pumpItineraryPage(t, const ItineraryPage(tripId: 'trip1'));
 
       expect(t.takeException(), isNull);
     });
@@ -514,67 +610,114 @@ void main() {
   // ═══════════════════════════════════════════════════════════════════════════
 
   group('Budget Page', () {
+    setUp(() {
+      when(() => mockApiClient.get('/trips/trip1/budget')).thenAnswer((_) async => {
+        'plannedTotal': 11500.0,
+        'actualTotal': 8500.0,
+        'currency': 'INR',
+        'categoryBreakdown': [
+          {'category': 'accommodation', 'planned': 5000.0, 'actual': 4000.0},
+          {'category': 'food', 'planned': 2000.0, 'actual': 1500.0},
+          {'category': 'transport', 'planned': 3000.0, 'actual': 2000.0},
+          {'category': 'activities', 'planned': 1000.0, 'actual': 800.0},
+          {'category': 'misc', 'planned': 500.0, 'actual': 200.0},
+        ],
+      });
+      when(() => mockApiClient.put('/trips/trip1/budget', data: any(named: 'data'))).thenAnswer((_) async => {
+        'plannedTotal': 15000.0,
+        'actualTotal': 8500.0,
+        'currency': 'INR',
+        'categoryBreakdown': [
+          {'category': 'accommodation', 'planned': 6000.0, 'actual': 4000.0},
+          {'category': 'food', 'planned': 3000.0, 'actual': 1500.0},
+          {'category': 'transport', 'planned': 4000.0, 'actual': 2000.0},
+          {'category': 'activities', 'planned': 1500.0, 'actual': 800.0},
+          {'category': 'misc', 'planned': 500.0, 'actual': 200.0},
+        ],
+      });
+    });
+
     // BUD-UI-01
     testWidgets('BUD-UI-01 · shows CircularProgressIndicator initially', (t) async {
       await pumpPage(t, wrapPlain(const BudgetPage(tripId: 'trip1')));
-
       expect(find.byType(CircularProgressIndicator), findsAtLeast(1));
     });
 
     // BUD-UI-02
     testWidgets('BUD-UI-02 · REMAINING BUDGET label is visible', (t) async {
       await pumpPage(t, wrapPlain(const BudgetPage(tripId: 'trip1')));
-
+      await t.pumpAndSettle();
       expect(find.text('REMAINING BUDGET'), findsOneWidget);
     });
 
     // BUD-UI-03
     testWidgets('BUD-UI-03 · Spending by Category section is visible', (t) async {
       await pumpPage(t, wrapPlain(const BudgetPage(tripId: 'trip1')));
-
+      await t.pumpAndSettle();
       expect(find.text('Spending by Category'), findsOneWidget);
     });
 
     // BUD-UI-04
     testWidgets('BUD-UI-04 · FAB for adding an expense is present', (t) async {
       await pumpPage(t, wrapPlain(const BudgetPage(tripId: 'trip1')));
-
+      await t.pumpAndSettle();
       expect(find.byType(FloatingActionButton), findsOneWidget);
     });
 
     // BUD-UI-05
     testWidgets('BUD-UI-05 · Daily Avg. label is present', (t) async {
       await pumpPage(t, wrapPlain(const BudgetPage(tripId: 'trip1')));
-
+      await t.pumpAndSettle();
       expect(find.text('Daily Avg.'), findsOneWidget);
     });
 
     // BUD-UI-06
     testWidgets('BUD-UI-06 · Days Left label is present', (t) async {
       await pumpPage(t, wrapPlain(const BudgetPage(tripId: 'trip1')));
-
+      await t.pumpAndSettle();
       expect(find.text('Days Left'), findsOneWidget);
     });
 
     // BUD-UI-07
     testWidgets('BUD-UI-07 · amounts are shown in ₹ Rupees', (t) async {
       await pumpPage(t, wrapPlain(const BudgetPage(tripId: 'trip1')));
-
+      await t.pumpAndSettle();
       expect(find.textContaining('₹', findRichText: true), findsAtLeast(1));
     });
 
     // BUD-UI-08
     testWidgets('BUD-UI-08 · donut ring (CircularProgressIndicator) present in budget ring card', (t) async {
       await pumpPage(t, wrapPlain(const BudgetPage(tripId: 'trip1')));
-
+      await t.pumpAndSettle();
       expect(find.byType(CircularProgressIndicator), findsAtLeast(1));
     });
 
     // BUD-UI-09
     testWidgets('BUD-UI-09 · category spending rows use LinearProgressIndicator bars', (t) async {
       await pumpPage(t, wrapPlain(const BudgetPage(tripId: 'trip1')));
-
+      await t.pumpAndSettle();
       expect(find.byType(LinearProgressIndicator), findsAtLeast(1));
+    });
+
+    // BUD-UI-13
+    testWidgets('BUD-UI-13 · Set Budgets dialog updates planned budget', (t) async {
+      await pumpPage(t, wrapPlain(const BudgetPage(tripId: 'trip1')));
+      await t.pumpAndSettle();
+
+      expect(find.text('Set Budgets'), findsOneWidget);
+      await t.tap(find.text('Set Budgets'));
+      await t.pumpAndSettle();
+
+      expect(find.text('Set Category Budgets'), findsOneWidget);
+      expect(find.byType(TextFormField), findsNWidgets(5));
+
+      await t.enterText(find.widgetWithText(TextFormField, 'Food Budget'), '3000.0');
+      await t.pump();
+
+      await t.tap(find.text('Save Budgets'));
+      await t.pumpAndSettle();
+
+      verify(() => mockApiClient.put('/trips/trip1/budget', data: any(named: 'data'))).called(1);
     });
   });
 
@@ -597,7 +740,7 @@ void main() {
       await pumpPage(t, wrapPlain(AddExpensePage(tripId: 'trip1')));
 
       expect(find.text('Category'), findsOneWidget);
-      expect(find.byType(FilterChip), findsAtLeast(1));
+      expect(find.byType(ChoiceChip), findsAtLeast(1));
     });
 
     // BUD-UI-12

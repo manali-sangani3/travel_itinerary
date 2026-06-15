@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -23,15 +24,19 @@ class _CollaborationPageState extends State<CollaborationPage> with SingleTicker
   List<Map<String, dynamic>> _collaborators = [];
   List<Map<String, dynamic>> _tasks = [];
   List<Map<String, dynamic>> _splits = [];
+  List<Map<String, dynamic>> _shares = [];
   bool _loading = true;
   final _emailCtrl = TextEditingController();
   final _taskCtrl = TextEditingController();
+  final _daysCtrl = TextEditingController(text: '7');
   String _shareRole = 'viewer';
+  String _linkRole = 'viewer';
+  String? _generatedLink;
 
   @override
-  void initState() { super.initState(); _tabs = TabController(length: 3, vsync: this); _load(); }
+  void initState() { super.initState(); _tabs = TabController(length: 4, vsync: this); _load(); }
   @override
-  void dispose() { _tabs.dispose(); _emailCtrl.dispose(); _taskCtrl.dispose(); super.dispose(); }
+  void dispose() { _tabs.dispose(); _emailCtrl.dispose(); _taskCtrl.dispose(); _daysCtrl.dispose(); super.dispose(); }
 
   Future<void> _load() async {
     setState(() => _loading = true);
@@ -39,7 +44,14 @@ class _CollaborationPageState extends State<CollaborationPage> with SingleTicker
       final c = await sl<ApiClient>().get('/trips/${widget.tripId}/collaborators') as List? ?? [];
       final t = await sl<ApiClient>().get('/trips/${widget.tripId}/tasks') as List? ?? [];
       final s = await sl<ApiClient>().get('/trips/${widget.tripId}/splits') as List? ?? [];
-      setState(() { _collaborators = c.cast(); _tasks = t.cast(); _splits = s.cast(); _loading = false; });
+      final sh = await sl<ApiClient>().get('/trips/${widget.tripId}/share') as List? ?? [];
+      setState(() {
+        _collaborators = c.cast();
+        _tasks = t.cast();
+        _splits = s.cast();
+        _shares = sh.cast();
+        _loading = false;
+      });
     } catch (_) { setState(() => _loading = false); }
   }
 
@@ -48,6 +60,30 @@ class _CollaborationPageState extends State<CollaborationPage> with SingleTicker
     try {
       await sl<ApiClient>().post('/trips/${widget.tripId}/collaborators', data: {'email': _emailCtrl.text.trim(), 'role': _shareRole});
       _emailCtrl.clear();
+      _load();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'), backgroundColor: AppColors.error));
+    }
+  }
+
+  Future<void> _generateLink() async {
+    try {
+      final res = await sl<ApiClient>().post('/trips/${widget.tripId}/share', data: {
+        'role': _linkRole,
+        'expiresInDays': int.tryParse(_daysCtrl.text) ?? 7
+      });
+      setState(() {
+        _generatedLink = res['shareUrl'];
+      });
+      _load();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'), backgroundColor: AppColors.error));
+    }
+  }
+
+  Future<void> _revokeLink(String shareId) async {
+    try {
+      await sl<ApiClient>().delete('/trips/${widget.tripId}/share/$shareId');
       _load();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'), backgroundColor: AppColors.error));
@@ -72,13 +108,13 @@ class _CollaborationPageState extends State<CollaborationPage> with SingleTicker
       appBar: AppBar(
         title: const Text('Collaborate'),
         leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => context.go('/trips/${widget.tripId}')),
-        bottom: TabBar(controller: _tabs, tabs: const [Tab(text: 'Members'), Tab(text: 'Tasks'), Tab(text: 'Splits')]),
+        bottom: TabBar(controller: _tabs, tabs: const [Tab(text: 'Members'), Tab(text: 'Tasks'), Tab(text: 'Splits'), Tab(text: 'Links')]),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : TabBarView(
               controller: _tabs,
-              children: [_membersTab(), _tasksTab(), _splitsTab()],
+              children: [_membersTab(), _tasksTab(), _splitsTab(), _linksTab()],
             ),
     );
   }
@@ -208,4 +244,107 @@ class _CollaborationPageState extends State<CollaborationPage> with SingleTicker
             );
           },
         );
+
+  Widget _linksTab() => SingleChildScrollView(
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Generate Share Link', style: AppTextStyles.h4),
+        const SizedBox(height: 12),
+        AppCard(
+          child: Column(
+            children: [
+              TextFormField(
+                controller: _daysCtrl,
+                keyboardType: TextInputType.number,
+                style: AppTextStyles.bodyMedium,
+                decoration: const InputDecoration(
+                  hintText: 'Expires in (days)',
+                  prefixIcon: Icon(Icons.timer_outlined, size: 20)
+                )
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(child: Text('Role:', style: AppTextStyles.labelLarge)),
+                  ChoiceChip(
+                    label: const Text('Viewer'),
+                    selected: _linkRole == 'viewer',
+                    onSelected: (_) => setState(() => _linkRole = 'viewer'),
+                  ),
+                  const SizedBox(width: 8),
+                  ChoiceChip(
+                    label: const Text('Editor'),
+                    selected: _linkRole == 'editor',
+                    onSelected: (_) => setState(() => _linkRole = 'editor'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              AppButton(label: 'Generate Link', onPressed: _generateLink),
+              if (_generatedLink != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(8)),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _generatedLink!,
+                          style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.copy_rounded, size: 20),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: _generatedLink!));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Link copied to clipboard'))
+                          );
+                        },
+                      )
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        SectionHeader(title: 'Active Share Links (${_shares.length})'),
+        const SizedBox(height: 12),
+        if (_shares.isEmpty)
+          const EmptyState(icon: Icons.link_off_rounded, title: 'No active share links', subtitle: 'Generate a link to share the itinerary')
+        else
+          ..._shares.map((s) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: AppCard(
+              child: Row(
+                children: [
+                  const Icon(Icons.link_rounded, color: AppColors.primary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Role: ${s['role']}', style: AppTextStyles.labelLarge),
+                        Text('Expires: ${s['expires_at'].toString().split('T')[0]}', style: AppTextStyles.bodySmall),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
+                    onPressed: () => _revokeLink(s['id']),
+                  ),
+                ],
+              ),
+            ),
+          )),
+      ],
+    ),
+  );
 }
