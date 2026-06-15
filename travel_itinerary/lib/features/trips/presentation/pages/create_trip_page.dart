@@ -31,15 +31,48 @@ class _CreateTripPageState extends State<CreateTripPage> {
   void dispose() { _destination.dispose(); _purpose.dispose(); _companion.dispose(); super.dispose(); }
 
   Future<void> _pickDate(bool isStart) async {
+    final today = DateUtils.dateOnly(DateTime.now());
+    
+    // Determine bounds
+    final firstDate = isStart ? today : (_startDate ?? today);
+    final lastDate = today.add(const Duration(days: 730));
+    
+    // Determine initial date
+    DateTime initialDate;
+    if (isStart) {
+      initialDate = _startDate ?? today.add(const Duration(days: 1));
+    } else {
+      initialDate = _endDate ?? _startDate ?? today.add(const Duration(days: 1));
+    }
+    
+    // Ensure initialDate is within bounds to prevent showDatePicker assertion errors
+    if (initialDate.isBefore(firstDate)) {
+      initialDate = firstDate;
+    }
+    if (initialDate.isAfter(lastDate)) {
+      initialDate = lastDate;
+    }
+
     final d = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().add(const Duration(days: 1)),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 730)),
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
     );
-    if (d != null) setState(() => isStart ? _startDate = d : _endDate = d);
+    if (d != null) {
+      setState(() {
+        if (isStart) {
+          _startDate = d;
+          if (_endDate != null && _endDate!.isBefore(_startDate!)) {
+            _endDate = null;
+          }
+        } else {
+          _endDate = d;
+        }
+      });
+    }
   }
-
+  
   void _addCompanion() {
     if (_companion.text.trim().isEmpty) return;
     setState(() { _companions.add(_companion.text.trim()); _companion.clear(); });

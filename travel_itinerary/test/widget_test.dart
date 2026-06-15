@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:intl/intl.dart';
 
 import 'package:travel_itinerary/features/auth/presentation/pages/login_page.dart';
 import 'package:travel_itinerary/features/auth/presentation/pages/register_page.dart';
@@ -479,6 +480,57 @@ void main() {
       await t.pump();
 
       expect(find.byType(CircularProgressIndicator), findsAtLeast(1));
+    });
+
+    // TRIP-UI-11
+    testWidgets('TRIP-UI-11 · date range validation resets end date if start date is after end date', (t) async {
+      await pumpPage(t, BlocProvider<TripsBloc>.value(
+        value: tripsBloc, child: wrapWithRouter(const CreateTripPage())));
+
+      // Initially both show 'Select'
+      expect(find.text('Select'), findsNWidgets(2));
+
+      // 1. Select End Date as 15th of next month
+      await t.tap(find.text('End'));
+      await t.pumpAndSettle();
+      expect(find.byType(DatePickerDialog), findsOneWidget);
+      
+      // Navigate to next month
+      await t.tap(find.byTooltip('Next month'));
+      await t.pumpAndSettle();
+
+      // Tap '15' in the dialog
+      await t.tap(find.descendant(of: find.byType(DatePickerDialog), matching: find.text('15')));
+      await t.pumpAndSettle();
+      await t.tap(find.text('OK'));
+      await t.pumpAndSettle();
+
+      // End date box should now display '15 <Next Month MMM> <Year>'
+      final now = DateTime.now();
+      final nextMonthDateTime = DateTime(now.year, now.month + 1, 1);
+      final nextMonthStr = DateFormat('MMM yyyy').format(nextMonthDateTime);
+      expect(find.textContaining('15 $nextMonthStr', findRichText: true), findsOneWidget);
+
+      // 2. Select Start Date as 20th of next month (after the End date of 15th)
+      await t.tap(find.text('Start'));
+      await t.pumpAndSettle();
+      expect(find.byType(DatePickerDialog), findsOneWidget);
+
+      // Navigate to next month
+      await t.tap(find.byTooltip('Next month'));
+      await t.pumpAndSettle();
+      
+      // Tap '20' in the dialog
+      await t.tap(find.descendant(of: find.byType(DatePickerDialog), matching: find.text('20')));
+      await t.pumpAndSettle();
+      await t.tap(find.text('OK'));
+      await t.pumpAndSettle();
+
+      // Start date box should now display '20 <Next Month MMM> <Year>'
+      expect(find.textContaining('20 $nextMonthStr', findRichText: true), findsOneWidget);
+
+      // End date box should have reset to 'Select' because the start date (20th) is after the end date (15th)
+      expect(find.text('Select'), findsOneWidget);
     });
   });
 
