@@ -1,6 +1,3 @@
-An mobile application for planning and organizing travel itineraries, tracking trip expenses, and storing travel memories. Users can create detailed day-by-day plans, manage bookings, track budgets, and document trips with photos and notes.
-
-
 Enhancement Features
 | Feature | Description |
 |---------|-------------|

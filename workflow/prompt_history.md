@@ -8,7 +8,7 @@ Act according to the [manager_persona.md] . Work within this set boundaries [pro
 
 Context: Business problem: Travelers manage trip logistics across disconnected tools. . What to build is [new%20features.md] 
 
-Format: Strictly follow the format mentioned in respective file for which template is given and make sure to put prd in 10-June-work/Agents.
+Format: Strictly follow the format mentioned in respective file for which template is given and make sure to put prd in /Agents.
 
 Make sure for entire session you follow this rule [.antigravityrules]
  
