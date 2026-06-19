@@ -64,3 +64,49 @@ add new features test cases in [TEST_CASES.md] file with old remain as it is als
 [workflow_template.md] using this template create Developer Handover & Workflow Document inside Folder [workflow]
 
 ---
+### [2026-06-18] Prompt 8
+
+**Task:** Develop QA feature — produce production-ready unit test cases with mock data.
+**Scope:** V2 enhancement test cases only for backend and frontend. New test file added alongside existing `test/widget_test.dart`.
+**Context:** Used `travel_itinerary/test/widget_test.dart` for existing test architecture (mocktail, flutter_test, wrapWithRouter, pumpPage helpers).
+**Features covered:** Packing Checklist Generator, Travel Document Checklist, Itinerary Sharing, Trip Notes & Memories, Photo Gallery, Bookings, Journal Entries, Collaboration Tasks.
+**Output Location:** `travel_itinerary/test/v2_widget_test.dart`
+
+---
+
+### [2026-06-18] Prompt 9
+
+Run `travel_itinerary/test/v2_widget_test.dart` and append results to `AI_Agents/TEST_REPORT.md` under **Frontend Widget Tests (Flutter)** with proper PASS/FAIL status.
+**Output Location:** `AI_Agents/TEST_REPORT.md` — Section 5 (V2 Enhancement Frontend Widget Tests)
+
+---
+
+### [2026-06-18] Prompt 10
+
+Generate one file for new V2 features DB migration and queries used after V2 enhancement.
+**Scope:** All new tables introduced in V2 — packing_items, packing_templates, document_checklist, trip_shares, trip_notes, trip_photos, journal_entry_photos, bookings, tasks — including CREATE TABLE, indexes, seed data, all runtime CRUD SQL queries, maintenance queries, and a table↔feature↔route quick-reference map.
+**Output Location:** `backend/src/db/v2_migration.sql`
+**Format:** Plain SQL (SQLite / better-sqlite3 compatible), 4 sections: Schema Migrations, Runtime Queries, Maintenance, Quick Reference.
+
+---
+
+### [2026-06-18] Prompt 11
+
+Develop QA feature — produce production-ready backend unit test cases with mock data.
+**Scope:** V2 enhancement test cases only for backend. New `.js` test file added to `backend/tests/`.
+**Framework:** Jest + Supertest (matching existing `trips.test.js`, `collaboration.test.js` patterns).
+**Features covered:**
+- Packing Checklist CRUD (10 tests)
+- Packing Template Generator (7 tests)
+- Document Checklist (10 tests)
+- Itinerary Sharing (12 tests)
+- Trip Notes & Memories (13 tests)
+- Photo Gallery (11 tests)
+- Bookings (12 tests)
+- Journal Entries (10 tests)
+- Collaboration Tasks (9 tests)
+- Access Control Matrix — Cross-feature (5 tests)
+
+**Output Location:** `backend/tests/v2.test.js`
+
+---
