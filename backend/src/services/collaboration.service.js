@@ -28,7 +28,7 @@ exports.getCollaborators = (tripId) => repo.getCollaborators(tripId);
 exports.getTasks = (tripId) => repo.getTasks(tripId);
 exports.createTask = (tripId, data) => {
   const id = uuid();
-  repo.createTask({ id, trip_id: tripId, ...data });
+  repo.createTask({ id, trip_id: tripId, assigned_to: null, ...data });
   return repo.getTasks(tripId).find((t) => t.id === id);
 };
 exports.updateTask = (taskId, data) => {

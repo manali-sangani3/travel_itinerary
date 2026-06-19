@@ -126,7 +126,11 @@ describe('Packing Checklist — CRUD', () => {
       .set(owner())
       .send({ checked: 1 });
     expect(res.status).toBe(200);
-    expect(res.body.checked).toBe(1);
+    expect(res.body.ok).toBe(true);
+
+    const list = await request(app).get(`/trips/${tripId}/packing`).set(owner());
+    const found = list.body.find(i => i.id === packItemId);
+    expect(found.checked).toBe(1);
   });
 
   // PACK-V2-06
@@ -136,7 +140,11 @@ describe('Packing Checklist — CRUD', () => {
       .set(owner())
       .send({ checked: 0 });
     expect(res.status).toBe(200);
-    expect(res.body.checked).toBe(0);
+    expect(res.body.ok).toBe(true);
+
+    const list = await request(app).get(`/trips/${tripId}/packing`).set(owner());
+    const found = list.body.find(i => i.id === packItemId);
+    expect(found.checked).toBe(0);
   });
 
   // PACK-V2-07
